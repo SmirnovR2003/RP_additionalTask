@@ -22,7 +22,6 @@ namespace Messenger
 
     class Messanger
     {
-        private static readonly IDatabase db = ConnectionMultiplexer.Connect("127.0.0.1:6379").GetDatabase();
         private static readonly IConnection natsConnection = new ConnectionFactory().CreateConnection("127.0.0.1:4222");
         private static List<int> _processesTimes = [0,0,0];
 
@@ -46,12 +45,12 @@ namespace Messenger
                 _processesTimes[_id]++;
                 Action action = new()
                 {
-                    Id = _id.ToString(),
+                    Id = "e" + _id.ToString() + "_" + _processesTimes[_id].ToString(),
                     ProcessesTimes = _processesTimes
                 };
                 string actionMessage = JsonConvert.SerializeObject(action);
                 messageBytes = Encoding.UTF8.GetBytes(actionMessage);
-                db.StringSetAsync("e"+ _id.ToString() + "_" + _processesTimes[_id].ToString(), actionMessage);
+                natsConnection.Publish("event", messageBytes);
             });
 
             Console.WriteLine($"Процесс с id {_id} готов");
@@ -69,15 +68,25 @@ namespace Messenger
                     continue;
                 }
 
-                if(tempId == _id)
-                {
-                    Console.WriteLine("нельзя отправить сообщение себе");
-                    continue;
-                }
-
                 string id = parts[0];
 
                 string restOfString = string.Join(" ", parts, 1, parts.Length - 1);
+
+                if (tempId == _id)
+                {
+                    Console.WriteLine("Сообщение себе: " + restOfString);
+                    _processesTimes[_id]++;
+
+                    Action actionSelf = new()
+                    {
+                        Id = "e" + _id.ToString() + "_" + _processesTimes[_id].ToString(),
+                        ProcessesTimes = _processesTimes
+                    };
+                    string actionMessageSelf = JsonConvert.SerializeObject(actionSelf);
+                    var messageSelfBytes = Encoding.UTF8.GetBytes(actionMessageSelf);
+                    natsConnection.Publish("event", messageSelfBytes);
+                    continue;
+                }
 
                 _processesTimes[_id]++;
                 MessageModel mess = new()
@@ -85,7 +94,6 @@ namespace Messenger
                     Id = _id.ToString(),
                     Text = restOfString,
                     ProcessesTimes = _processesTimes
-
                 };
                 string messMessage = JsonConvert.SerializeObject(mess);
 
@@ -94,12 +102,12 @@ namespace Messenger
 
                 Action action = new()
                 {
-                    Id = _id.ToString(),
+                    Id = "e" + _id.ToString() + "_" + _processesTimes[_id].ToString(),
                     ProcessesTimes = _processesTimes
                 };
                 string actionMessage = JsonConvert.SerializeObject(action);
-                db.StringSetAsync("e" + _id.ToString() + "_" + _processesTimes[_id].ToString(), actionMessage);
-
+                messageBytes = Encoding.UTF8.GetBytes(actionMessage);
+                natsConnection.Publish("event", messageBytes);
             };
         }
     }

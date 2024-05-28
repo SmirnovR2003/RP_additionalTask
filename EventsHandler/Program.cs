@@ -55,12 +55,12 @@ namespace Messenger
 
         public static bool operator>=(Action a, Action b)
         {
-            return !(a < b);
+            return b <= a;
         }
 
         public static bool operator>(Action a, Action b)
         {
-            return !(a <= b);
+            return b < a;
 
         }
     }
@@ -73,43 +73,55 @@ namespace Messenger
         static void Main(string[] args)
         {
            
-
+            //сделать без очищения базы(доп)
+            //сделать внутренние события
             while (true)
             {
                 List<string> past = [];
                 List<string> future = [];
                 List<string> parallel = [];
-                Console.WriteLine("Введите id процесса и номер события: <номер процесса> <номер события>");
+                Console.WriteLine("Введите id процесса и номер события: <номер сессии> <номер процесса> <номер события>");
                 string input = Console.ReadLine();
 
                 string[] parts = input.Split(' ');
 
-                if (parts.Length != 2 || !int.TryParse(parts[0], out int tempProcessId) || !int.TryParse(parts[1], out int tempActionId))
+                if (parts.Length != 3 
+                    || !int.TryParse(parts[0], out int tempSessionId) 
+                    || !int.TryParse(parts[1], out int tempProcessId) 
+                    || !int.TryParse(parts[2], out int tempActionId))
                 {
                     Console.WriteLine("не правльный формат ввода");
                     continue;
                 }
-                var currAction = JsonConvert.DeserializeObject<Action>(db.StringGet("e" + tempProcessId.ToString() + "_" + tempActionId.ToString()));
 
-                foreach (string? key in connection.GetServer("127.0.0.1:6379").Keys(pattern:"*"))
+                Dictionary<string, List<int>> times = JsonConvert.DeserializeObject<Dictionary<string, List<int>>>(db.StringGet(tempSessionId.ToString()));
+
+                Action currAction = new()
                 {
-                    string? tesxtByDB = db.StringGet(key);
-                    var action = JsonConvert.DeserializeObject<Action>(tesxtByDB);
+                    ProcessesTimes = times["e" + tempProcessId.ToString() + "_" + tempActionId.ToString()]
+                };
+
+                foreach (var key in times)
+                {
+                    Action action = new()
+                    {
+                        ProcessesTimes = key.Value
+                    };
 
                     if (action == currAction) continue;
 
                     if (action < currAction) 
                     {
-                        past.Add(key);
+                        past.Add(key.Key);
                         continue;
                     }
 
                     if(currAction <  action)
                     {
-                        future.Add(key);
+                        future.Add(key.Key);
                         continue;
                     }
-                    parallel.Add(key);
+                    parallel.Add(key.Key);
                 }
 
                 Console.WriteLine("past: " + string.Join(", ", past));
